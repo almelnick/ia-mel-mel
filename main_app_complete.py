@@ -78,7 +78,187 @@ try:
     from utils.data_processor import DataProcessor
     from dashboards.ecommerce_dashboard import EcommerceDashboard
 except ImportError as e:
-    st.error(f"Error importando módulos: {str(e)}")
+    st.markdown(f"**Fecha del reporte:** {report_date}")
+    st.markdown("---")
+    
+    # Resumen de KPIs
+    st.markdown("### 📊 Resumen de KPIs")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        revenue = kpis.get('total_revenue', {})
+        st.metric("Revenue Total", f"${revenue.get('value', 0):,.0f}", f"{revenue.get('trend', 0):+.1f}%")
+    
+    with col2:
+        roas = kpis.get('overall_roas', {})
+        st.metric("ROAS Promedio", f"{roas.get('value', 0):.1f}x", f"{roas.get('trend', 0):+.1f}%")
+    
+    with col3:
+        conversions = kpis.get('total_conversions', {})
+        st.metric("Conversiones", f"{conversions.get('value', 0):,}", f"{conversions.get('trend', 0):+.1f}%")
+    
+    with col4:
+        spend = kpis.get('total_spend', {})
+        st.metric("Gasto Total", f"${spend.get('value', 0):,.0f}", f"{spend.get('trend', 0):+.1f}%")
+    
+    # Principales insights
+    st.markdown("### 💡 Principales Insights")
+    
+    opportunities = insights.get('optimization_opportunities', [])[:3]
+    for i, opp in enumerate(opportunities, 1):
+        st.write(f"{i}. **{opp.get('title', 'Oportunidad')}**: {opp.get('description', '')}")
+    
+    # Recomendaciones de acción
+    st.markdown("### 🎯 Recomendaciones de Acción")
+    
+    scaling = insights.get('scaling_recommendations', [])[:3]
+    for i, rec in enumerate(scaling, 1):
+        action_type = "Escalar" if rec.get('type') == 'scale_up' else "Reducir"
+        st.write(f"{i}. **{action_type} {rec.get('channel', 'Canal')}**: {rec.get('recommended_action', '')}")
+
+def generate_performance_report(data_processor, processed_data):
+    """Generar reporte de performance"""
+    st.markdown("## 📈 Reporte de Performance")
+    
+    # Métricas por canal
+    st.markdown("### 📊 Performance por Canal")
+    
+    performance = processed_data['combined_metrics'].get('performance', {})
+    channel_ranking = performance.get('channel_ranking', [])
+    
+    if channel_ranking:
+        df_channels = pd.DataFrame(channel_ranking)
+        st.dataframe(df_channels, use_container_width=True)
+    
+    # Tendencias
+    st.markdown("### 📈 Tendencias")
+    charts = data_processor.create_performance_charts(processed_data)
+    
+    if charts.get('revenue_trend'):
+        st.plotly_chart(charts['revenue_trend'], use_container_width=True)
+
+def generate_ai_report(ai_analyzer, processed_data):
+    """Generar reporte de insights de IA"""
+    st.markdown("## 🤖 Reporte de Insights de IA")
+    
+    # Generar reporte completo
+    report = ai_analyzer.export_insights_report('dict')
+    
+    # Mostrar resumen ejecutivo
+    summary = report.get('executive_summary', {})
+    
+    st.markdown("### 📋 Resumen Ejecutivo")
+    st.write(f"**Puntuación General:** {summary.get('overall_score', 0)}/100")
+    st.write(f"**Total de Oportunidades:** {summary.get('key_metrics', {}).get('total_opportunities', 0)}")
+    st.write(f"**Alertas Críticas:** {summary.get('key_metrics', {}).get('critical_alerts', 0)}")
+    
+    # Exportar reporte completo
+    st.markdown("### 💾 Exportar Reporte Completo")
+    
+    report_json = ai_analyzer.export_insights_report('json')
+    st.download_button(
+        "📄 Descargar Reporte Completo (JSON)",
+        report_json,
+        f"reporte_ia_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+        "application/json"
+    )
+
+def show_settings_page(onboarding, integration_manager):
+    """Mostrar página de configuración"""
+    st.markdown("""
+    <div class='main-header'>
+        <h1 style='margin: 0; color: white;'>⚙️ Configuración</h1>
+        <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>
+            Configuración del sistema y preferencias
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Configuración del onboarding
+    st.markdown("### 🎯 Configuración del Negocio")
+    
+    if onboarding.is_completed():
+        business_config = onboarding.get_business_config()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Nombre del negocio:** {business_config.get('business_name', 'N/A')}")
+            st.write(f"**Tipo de negocio:** {business_config.get('business_type', 'N/A')}")
+            st.write(f"**Industria:** {business_config.get('industry', 'N/A')}")
+        
+        with col2:
+            st.write(f"**Tamaño:** {business_config.get('business_size', 'N/A')}")
+            st.write(f"**Ingresos:** {business_config.get('monthly_revenue', 'N/A')}")
+            st.write(f"**Completado:** {business_config.get('completed_at', 'N/A')}")
+        
+        if st.button("🔄 Reconfigurar Negocio"):
+            st.session_state.onboarding_completed = False
+            st.session_state.onboarding_step = 1
+            st.success("Onboarding reiniciado. Serás redirigido...")
+            st.rerun()
+    
+    # Configuración de integraciones
+    st.markdown("### 🔗 Estado de Integraciones")
+    integration_manager.show_connection_health()
+    
+    # Configuración del sistema
+    st.markdown("### 🛠️ Configuración del Sistema")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Preferencias de Dashboard")
+        
+        theme_preference = st.selectbox(
+            "Tema visual",
+            ["Claro", "Oscuro", "Automático"],
+            index=0
+        )
+        
+        update_frequency = st.selectbox(
+            "Frecuencia de actualización",
+            ["Tiempo real", "Cada 5 minutos", "Cada hora", "Manual"],
+            index=1
+        )
+        
+        notifications = st.checkbox("Notificaciones push", value=True)
+    
+    with col2:
+        st.subheader("Configuración de Datos")
+        
+        data_retention = st.selectbox(
+            "Retención de datos",
+            ["30 días", "90 días", "1 año", "Indefinido"],
+            index=1
+        )
+        
+        auto_backup = st.checkbox("Backup automático", value=True)
+        
+        data_quality_checks = st.checkbox("Verificaciones de calidad", value=True)
+    
+    # Guardar configuración
+    if st.button("💾 Guardar Configuración", type="primary"):
+        # Aquí se guardaría la configuración
+        st.success("✅ Configuración guardada correctamente")
+    
+    # Información del sistema
+    st.markdown("### ℹ️ Información del Sistema")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Versión", "v2.1.0")
+    
+    with col2:
+        st.metric("Última actualización", "09/09/2025")
+    
+    with col3:
+        st.metric("Uptime", "99.9%")
+
+if __name__ == "__main__":
+    main().error(f"Error importando módulos: {str(e)}")
     st.stop()
 
 # Inicializar componentes principales
@@ -327,191 +507,6 @@ def show_insights_section(ai_analyzer, processed_data):
     
     # Generar insights
     insights = ai_analyzer.analyze_performance_data(processed_data.get('raw_data', {}))
-    
-    # Fecha del reporte
-    report_date = datetime.now().strftime("%d/%m/%Y %H:%M")
-    
-    st.markdown(f"**Fecha del reporte:** {report_date}")
-    st.markdown("---")
-    
-    # Resumen de KPIs
-    st.markdown("### 📊 Resumen de KPIs")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        revenue = kpis.get('total_revenue', {})
-        st.metric("Revenue Total", f"${revenue.get('value', 0):,.0f}", f"{revenue.get('trend', 0):+.1f}%")
-    
-    with col2:
-        roas = kpis.get('overall_roas', {})
-        st.metric("ROAS Promedio", f"{roas.get('value', 0):.1f}x", f"{roas.get('trend', 0):+.1f}%")
-    
-    with col3:
-        conversions = kpis.get('total_conversions', {})
-        st.metric("Conversiones", f"{conversions.get('value', 0):,}", f"{conversions.get('trend', 0):+.1f}%")
-    
-    with col4:
-        spend = kpis.get('total_spend', {})
-        st.metric("Gasto Total", f"${spend.get('value', 0):,.0f}", f"{spend.get('trend', 0):+.1f}%")
-    
-    # Principales insights
-    st.markdown("### 💡 Principales Insights")
-    
-    opportunities = insights.get('optimization_opportunities', [])[:3]
-    for i, opp in enumerate(opportunities, 1):
-        st.write(f"{i}. **{opp.get('title', 'Oportunidad')}**: {opp.get('description', '')}")
-    
-    # Recomendaciones de acción
-    st.markdown("### 🎯 Recomendaciones de Acción")
-    
-    scaling = insights.get('scaling_recommendations', [])[:3]
-    for i, rec in enumerate(scaling, 1):
-        action_type = "Escalar" if rec.get('type') == 'scale_up' else "Reducir"
-        st.write(f"{i}. **{action_type} {rec.get('channel', 'Canal')}**: {rec.get('recommended_action', '')}")
-
-def generate_performance_report(data_processor, processed_data):
-    """Generar reporte de performance"""
-    st.markdown("## 📈 Reporte de Performance")
-    
-    # Métricas por canal
-    st.markdown("### 📊 Performance por Canal")
-    
-    performance = processed_data['combined_metrics'].get('performance', {})
-    channel_ranking = performance.get('channel_ranking', [])
-    
-    if channel_ranking:
-        df_channels = pd.DataFrame(channel_ranking)
-        st.dataframe(df_channels, use_container_width=True)
-    
-    # Tendencias
-    st.markdown("### 📈 Tendencias")
-    charts = data_processor.create_performance_charts(processed_data)
-    
-    if charts.get('revenue_trend'):
-        st.plotly_chart(charts['revenue_trend'], use_container_width=True)
-
-def generate_ai_report(ai_analyzer, processed_data):
-    """Generar reporte de insights de IA"""
-    st.markdown("## 🤖 Reporte de Insights de IA")
-    
-    # Generar reporte completo
-    report = ai_analyzer.export_insights_report('dict')
-    
-    # Mostrar resumen ejecutivo
-    summary = report.get('executive_summary', {})
-    
-    st.markdown("### 📋 Resumen Ejecutivo")
-    st.write(f"**Puntuación General:** {summary.get('overall_score', 0)}/100")
-    st.write(f"**Total de Oportunidades:** {summary.get('key_metrics', {}).get('total_opportunities', 0)}")
-    st.write(f"**Alertas Críticas:** {summary.get('key_metrics', {}).get('critical_alerts', 0)}")
-    
-    # Exportar reporte completo
-    st.markdown("### 💾 Exportar Reporte Completo")
-    
-    report_json = ai_analyzer.export_insights_report('json')
-    st.download_button(
-        "📄 Descargar Reporte Completo (JSON)",
-        report_json,
-        f"reporte_ia_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-        "application/json"
-    )
-
-def show_settings_page(onboarding, integration_manager):
-    """Mostrar página de configuración"""
-    st.markdown("""
-    <div class='main-header'>
-        <h1 style='margin: 0; color: white;'>⚙️ Configuración</h1>
-        <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>
-            Configuración del sistema y preferencias
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Configuración del onboarding
-    st.markdown("### 🎯 Configuración del Negocio")
-    
-    if onboarding.is_completed():
-        business_config = onboarding.get_business_config()
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write(f"**Nombre del negocio:** {business_config.get('business_name', 'N/A')}")
-            st.write(f"**Tipo de negocio:** {business_config.get('business_type', 'N/A')}")
-            st.write(f"**Industria:** {business_config.get('industry', 'N/A')}")
-        
-        with col2:
-            st.write(f"**Tamaño:** {business_config.get('business_size', 'N/A')}")
-            st.write(f"**Ingresos:** {business_config.get('monthly_revenue', 'N/A')}")
-            st.write(f"**Completado:** {business_config.get('completed_at', 'N/A')}")
-        
-        if st.button("🔄 Reconfigurar Negocio"):
-            st.session_state.onboarding_completed = False
-            st.session_state.onboarding_step = 1
-            st.success("Onboarding reiniciado. Serás redirigido...")
-            st.rerun()
-    
-    # Configuración de integraciones
-    st.markdown("### 🔗 Estado de Integraciones")
-    integration_manager.show_connection_health()
-    
-    # Configuración del sistema
-    st.markdown("### 🛠️ Configuración del Sistema")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Preferencias de Dashboard")
-        
-        theme_preference = st.selectbox(
-            "Tema visual",
-            ["Claro", "Oscuro", "Automático"],
-            index=0
-        )
-        
-        update_frequency = st.selectbox(
-            "Frecuencia de actualización",
-            ["Tiempo real", "Cada 5 minutos", "Cada hora", "Manual"],
-            index=1
-        )
-        
-        notifications = st.checkbox("Notificaciones push", value=True)
-    
-    with col2:
-        st.subheader("Configuración de Datos")
-        
-        data_retention = st.selectbox(
-            "Retención de datos",
-            ["30 días", "90 días", "1 año", "Indefinido"],
-            index=1
-        )
-        
-        auto_backup = st.checkbox("Backup automático", value=True)
-        
-        data_quality_checks = st.checkbox("Verificaciones de calidad", value=True)
-    
-    # Guardar configuración
-    if st.button("💾 Guardar Configuración", type="primary"):
-        # Aquí se guardaría la configuración
-        st.success("✅ Configuración guardada correctamente")
-    
-    # Información del sistema
-    st.markdown("### ℹ️ Información del Sistema")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("Versión", "v2.1.0")
-    
-    with col2:
-        st.metric("Última actualización", "09/09/2025")
-    
-    with col3:
-        st.metric("Uptime", "99.9%")
-
-if __name__ == "__main__":
-    main().get('raw_data', {}))
     
     # Mostrar insights en tabs
     tab1, tab2, tab3 = st.tabs(["🎯 Oportunidades", "📈 Escalado", "⚠️ Alertas"])
@@ -834,4 +829,9 @@ def generate_executive_report(integration_manager, data_processor, ai_analyzer):
     # Procesar datos
     processed_data = data_processor.process_multi_source_data(integration_manager)
     kpis = data_processor.get_kpi_metrics(processed_data)
-    insights = ai_analyzer.analyze_performance_data(processed_data
+    insights = ai_analyzer.analyze_performance_data(processed_data.get('raw_data', {}))
+    
+    # Fecha del reporte
+    report_date = datetime.now().strftime("%d/%m/%Y %H:%M")
+    
+    st
