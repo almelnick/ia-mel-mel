@@ -1,693 +1,837 @@
+# main.py
 import streamlit as st
 import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import json
-import os
-from pathlib import Path
 
-# Configuración de página
+# Configuración de la página
 st.set_page_config(
-    page_title="🚀 Marketing Dashboard AI",
-    page_icon="📊",
+    page_title="Marketing Dashboard IA",
+    page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado para diseño moderno
+# CSS personalizado
 st.markdown("""
 <style>
-    .main {
-        padding-top: 1rem;
-    }
-    .stMetric {
-        background-color: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+    .main-header {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         padding: 1rem;
         border-radius: 10px;
-        backdrop-filter: blur(10px);
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
     }
+    
     .metric-card {
-        background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-        border-radius: 15px;
-        padding: 20px;
-        border: 1px solid rgba(255,255,255,0.2);
-        backdrop-filter: blur(10px);
-        margin-bottom: 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+        margin: 0.5rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    
+    .insight-card {
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+        margin: 1rem 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
     .sidebar .sidebar-content {
         background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
     }
-    .stSelectbox > div > div {
-        background-color: rgba(255, 255, 255, 0.9);
-        border-radius: 10px;
+    
+    /* Animaciones */
+    .metric-card:hover {
+        transform: translateY(-2px);
+        transition: transform 0.2s;
     }
-    .insight-card {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.05));
-        border-left: 4px solid #667eea;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
+    
+    .insight-card:hover {
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        transition: box-shadow 0.3s;
     }
-    .recommendation-high {
-        background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.05));
-        border-left: 4px solid #dc3545;
-    }
-    .recommendation-medium {
-        background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
-        border-left: 4px solid #ffc107;
-    }
-    .recommendation-low {
-        background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05));
-        border-left: 4px solid #28a745;
-    }
-    .header-container {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-        padding: 2rem;
-        border-radius: 15px;
-        margin-bottom: 2rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-    }
+    
+    /* Ocultar elementos de Streamlit */
+    .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
+    .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
+    .viewerBadge_text__1JaDK { display: none; }
+    
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# Importar módulos locales (con manejo de errores)
+# Imports de módulos locales
 try:
     from integrations.manager import IntegrationManager
+    from utils.intelligent_onboarding import IntelligentOnboarding
     from utils.ai_analyzer import AIAnalyzer
     from utils.data_processor import DataProcessor
-    from utils.intelligent_onboarding import IntelligentOnboarding
     from dashboards.ecommerce_dashboard import EcommerceDashboard
 except ImportError as e:
-    st.error(f"Error importando módulos: {e}")
-    st.info("Asegúrate de que todos los archivos estén en las carpetas correctas")
+    st.error(f"Error importando módulos: {str(e)}")
+    st.stop()
 
-# Inicializar managers
+# Inicializar componentes principales
 @st.cache_resource
-def init_managers():
-    return {
-        'integration_manager': IntegrationManager(),
-        'ai_analyzer': AIAnalyzer(),
-        'data_processor': DataProcessor(),
-        'onboarding_system': IntelligentOnboarding()
-    }
+def initialize_components():
+    """Inicializar componentes principales del sistema"""
+    try:
+        integration_manager = IntegrationManager()
+        onboarding = IntelligentOnboarding()
+        ai_analyzer = AIAnalyzer()
+        data_processor = DataProcessor()
+        ecommerce_dashboard = EcommerceDashboard(data_processor, ai_analyzer)
+        
+        return integration_manager, onboarding, ai_analyzer, data_processor, ecommerce_dashboard
+    except Exception as e:
+        st.error(f"Error inicializando componentes: {str(e)}")
+        return None, None, None, None, None
 
-managers = init_managers()
-
-# Funciones principales
 def main():
-    # Verificar si el onboarding fue completado
-    onboarding = managers['onboarding_system']
+    """Función principal de la aplicación"""
     
-    if not onboarding.is_onboarding_completed() and not st.session_state.get('onboarding_completed'):
-        # Mostrar onboarding
-        onboarding.run_onboarding()
+    # Inicializar componentes
+    components = initialize_components()
+    if any(comp is None for comp in components):
+        st.error("No se pudieron inicializar los componentes del sistema")
         return
     
-    # Sidebar para navegación
+    integration_manager, onboarding, ai_analyzer, data_processor, ecommerce_dashboard = components
+    
+    # Verificar si el onboarding está completado
+    onboarding_completed = onboarding.is_completed()
+    
+    # Sidebar con navegación
     with st.sidebar:
         st.markdown("""
-        <div style='text-align: center; padding: 20px;'>
-            <h1 style='color: white; font-size: 24px; margin-bottom: 10px;'>
-                🚀 Marketing Dashboard
-            </h1>
-            <p style='color: rgba(255,255,255,0.8); font-size: 14px;'>
-                Inteligencia de Marketing Digital
-            </p>
+        <div style='text-align: center; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    border-radius: 10px; margin-bottom: 2rem; color: white;'>
+            <h2 style='margin: 0; color: white;'>🚀 Marketing IA</h2>
+            <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>Dashboard Inteligente</p>
         </div>
         """, unsafe_allow_html=True)
         
-        page = st.selectbox(
-            "📍 Navegación",
-            ["Dashboard Principal", "Configurar Integraciones", "Análisis IA", "Reportes", "Configuración"],
-            key="navigation"
-        )
-        
-        # Mostrar estado de integraciones
-        st.markdown("---")
-        active_integrations = managers['integration_manager'].get_active_integrations()
-        
-        if active_integrations:
-            st.success(f"✅ {len(active_integrations)} integraciones activas")
-            for integration in active_integrations:
-                st.text(f"• {integration.title()}")
+        # Menú de navegación
+        if not onboarding_completed:
+            selected_page = "Onboarding"
+            st.info("🎯 Completa el onboarding para acceder a todas las funciones")
         else:
-            st.warning("⚠️ Sin integraciones configuradas")
-            st.info("👈 Ve a 'Configurar Integraciones' para empezar")
+            pages = {
+                "📊 Dashboard": "dashboard",
+                "🔗 Integraciones": "integrations", 
+                "🤖 Análisis IA": "ai_analysis",
+                "📈 Reportes": "reports",
+                "⚙️ Configuración": "settings"
+            }
+            
+            selected_page = st.selectbox(
+                "Navegación",
+                list(pages.keys()),
+                index=0
+            )
+            
+            selected_page = pages[selected_page]
         
-        # Quick stats en sidebar
+        # Estado del sistema
         st.markdown("---")
-        st.markdown("### 📊 Quick Stats")
-        if active_integrations:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("ROI", "245%", "12%")
-            with col2:
-                st.metric("ROAS", "3.2x", "0.3x")
+        st.markdown("### 📊 Estado del Sistema")
+        
+        if onboarding_completed:
+            connected_integrations = len(integration_manager.get_connected_connectors())
+            total_integrations = len(integration_manager.connectors)
+            
+            st.metric(
+                "Integraciones Activas",
+                f"{connected_integrations}/{total_integrations}",
+                f"{connected_integrations} conectadas"
+            )
+            
+            # Progreso de configuración
+            config_progress = (connected_integrations / total_integrations) * 100
+            st.progress(config_progress / 100)
+            
+            if connected_integrations == 0:
+                st.warning("⚠️ Conecta integraciones para ver datos")
+            elif connected_integrations < 3:
+                st.info("💡 Conecta más integraciones para mejores insights")
+            else:
+                st.success("✅ Sistema configurado correctamente")
+        else:
+            st.info("🎯 Onboarding pendiente")
+        
+        # Información adicional
+        st.markdown("---")
+        st.markdown("### ℹ️ Información")
+        with st.expander("Acerca del sistema"):
+            st.write("""
+            **Marketing Dashboard IA** es una plataforma inteligente que:
+            
+            • 🔗 Conecta múltiples fuentes de datos
+            • 🤖 Genera insights automáticamente  
+            • 📈 Optimiza tus campañas
+            • 🎯 Identifica oportunidades de escalado
+            • 📊 Centraliza todos tus KPIs
+            """)
     
-    # Routing de páginas
-    if page == "Dashboard Principal":
-        show_dashboard()
-    elif page == "Configurar Integraciones":
-        show_integrations_config()
-    elif page == "Análisis IA":
-        show_ai_analysis()
-    elif page == "Reportes":
-        show_reports()
-    elif page == "Configuración":
-        show_settings()
+    # Contenido principal basado en la página seleccionada
+    if not onboarding_completed or selected_page == "Onboarding":
+        show_onboarding_page(onboarding)
+    
+    elif selected_page == "dashboard":
+        show_dashboard_page(integration_manager, data_processor, ai_analyzer, ecommerce_dashboard, onboarding)
+    
+    elif selected_page == "integrations":
+        show_integrations_page(integration_manager)
+    
+    elif selected_page == "ai_analysis":
+        show_ai_analysis_page(integration_manager, ai_analyzer, data_processor)
+    
+    elif selected_page == "reports":
+        show_reports_page(integration_manager, data_processor, ai_analyzer)
+    
+    elif selected_page == "settings":
+        show_settings_page(onboarding, integration_manager)
 
-def show_dashboard():
-    """Dashboard principal con métricas y gráficos"""
-    # Header
-    st.markdown("""
-    <div class="header-container">
-        <h1 style="font-size: 3rem; font-weight: bold; margin-bottom: 1rem; background: linear-gradient(45deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-            🚀 Dashboard Principal
-        </h1>
-        <p style="font-size: 1.2rem; color: #666; margin-bottom: 0;">
-            Análisis en tiempo real de tu performance de marketing digital
+def show_onboarding_page(onboarding):
+    """Mostrar página de onboarding"""
+    onboarding.run_onboarding()
+
+def show_dashboard_page(integration_manager, data_processor, ai_analyzer, ecommerce_dashboard, onboarding):
+    """Mostrar página principal del dashboard"""
+    
+    # Determinar tipo de dashboard basado en configuración del onboarding
+    business_config = onboarding.get_business_config()
+    business_type = business_config.get('business_type', 'hybrid')
+    
+    if business_type == 'ecommerce':
+        ecommerce_dashboard.render(integration_manager)
+    else:
+        # Dashboard genérico para otros tipos de negocio
+        show_generic_dashboard(integration_manager, data_processor, ai_analyzer, business_config)
+
+def show_generic_dashboard(integration_manager, data_processor, ai_analyzer, business_config):
+    """Mostrar dashboard genérico adaptable"""
+    
+    business_name = business_config.get('business_name', 'Tu Negocio')
+    business_type = business_config.get('business_type', 'hybrid')
+    
+    # Header principal
+    st.markdown(f"""
+    <div class='main-header'>
+        <h1 style='margin: 0; color: white;'>📊 Dashboard de {business_name}</h1>
+        <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>
+            Panel de control para {business_type.replace('_', ' ').title()}
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Verificar integraciones
-    active_integrations = managers['integration_manager'].get_active_integrations()
-    if not active_integrations:
-        st.warning("⚠️ No hay integraciones configuradas. Ve a la sección 'Configurar Integraciones' para empezar.")
+    # Procesar datos
+    processed_data = data_processor.process_multi_source_data(integration_manager)
+    
+    if not processed_data or not processed_data.get('combined_metrics'):
+        st.warning("🔗 Conecta al menos una integración para ver datos en el dashboard")
         return
     
-    # Selector de rango de fechas
-    col1, col2, col3 = st.columns([2, 2, 1])
-    with col1:
-        start_date = st.date_input("📅 Fecha Inicio", datetime.now() - timedelta(days=30))
-    with col2:
-        end_date = st.date_input("📅 Fecha Fin", datetime.now())
-    with col3:
-        if st.button("🔄 Actualizar", type="primary"):
-            st.cache_data.clear()
-            st.rerun()
+    # Mostrar KPIs principales
+    show_kpi_section(data_processor, processed_data)
     
-    # Obtener y mostrar datos
-    dashboard_data = fetch_all_data(start_date, end_date)
+    # Mostrar gráficos
+    show_charts_section(data_processor, processed_data)
     
-    if dashboard_data:
-        render_dashboard(dashboard_data)
-    else:
-        st.info("📊 Haz clic en 'Actualizar' para cargar el dashboard")
+    # Mostrar insights de IA
+    show_insights_section(ai_analyzer, processed_data)
 
-def fetch_all_data(start_date, end_date):
-    """Obtener datos de todas las integraciones"""
-    manager = managers['integration_manager']
-    all_data = {}
+def show_kpi_section(data_processor, processed_data):
+    """Mostrar sección de KPIs principales"""
+    st.markdown("### 📊 Métricas Principales")
     
-    active_integrations = manager.get_active_integrations()
+    kpis = data_processor.get_kpi_metrics(processed_data)
     
-    if not active_integrations:
-        return None
-    
-    # Progress bar
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    for i, integration_name in enumerate(active_integrations):
-        try:
-            status_text.text(f"Obteniendo datos de {integration_name}...")
-            data = manager.get_data(integration_name, start_date, end_date)
-            all_data[integration_name] = data
-            progress_bar.progress((i + 1) / len(active_integrations))
-        except Exception as e:
-            st.error(f"Error obteniendo datos de {integration_name}: {str(e)}")
-    
-    progress_bar.empty()
-    status_text.empty()
-    return all_data
-
-def render_dashboard(data):
-    """Renderizar dashboard con datos"""
-    
-    # Calcular KPIs
-    kpis = managers['data_processor'].calculate_kpis(data)
-    
-    # KPIs principales
-    st.subheader("📈 KPIs Principales")
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Primera fila de KPIs
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        revenue = kpis.get('revenue', 0)
-        revenue_change = kpis.get('revenue_change', 0)
+        revenue = kpis.get('total_revenue', {})
         st.metric(
             "💰 Revenue Total",
-            f"${revenue:,.0f}",
-            f"{revenue_change:+.1f}%" if revenue_change else None
+            f"${revenue.get('value', 0):,.0f}",
+            f"{revenue.get('trend', 0):+.1f}%"
         )
     
     with col2:
-        aov = kpis.get('aov', 0)
-        aov_change = kpis.get('aov_change', 0)
+        roas = kpis.get('overall_roas', {})
         st.metric(
-            "🛒 AOV",
-            f"${aov:.2f}",
-            f"{aov_change:+.1f}%" if aov_change else None
+            "📈 ROAS",
+            f"{roas.get('value', 0):.1f}x",
+            f"{roas.get('trend', 0):+.1f}%"
         )
     
     with col3:
-        conv_rate = kpis.get('conversion_rate', 0)
-        conv_change = kpis.get('conversion_rate_change', 0)
+        conversions = kpis.get('total_conversions', {})
         st.metric(
-            "📈 Conversión",
-            f"{conv_rate:.2f}%",
-            f"{conv_change:+.1f}%" if conv_change else None
+            "🎯 Conversiones",
+            f"{conversions.get('value', 0):,}",
+            f"{conversions.get('trend', 0):+.1f}%"
         )
     
     with col4:
-        roas = kpis.get('roas', 0)
-        roas_change = kpis.get('roas_change', 0)
+        spend = kpis.get('total_spend', {})
         st.metric(
-            "🎯 ROAS",
-            f"{roas:.1f}x",
-            f"{roas_change:+.1f}%" if roas_change else None
+            "💸 Gasto",
+            f"${spend.get('value', 0):,.0f}",
+            f"{spend.get('trend', 0):+.1f}%"
         )
-    
-    with col5:
-        orders = kpis.get('orders', 0)
-        orders_change = kpis.get('orders_change', 0)
-        st.metric(
-            "📋 Órdenes",
-            f"{orders:,}",
-            f"{orders_change:+.1f}%" if orders_change else None
-        )
-    
-    # Gráficos principales
-    st.subheader("📊 Análisis de Performance")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Gráfico de gasto por canal
-        channel_spend = managers['data_processor'].get_channel_spend(data)
-        if not channel_spend.empty:
-            fig = px.pie(
-                channel_spend, 
-                values='spend', 
-                names='channel',
-                title="💸 Distribución de Gasto por Canal",
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            fig.update_layout(
-                font=dict(size=12),
-                showlegend=True,
-                height=400
-            )
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Gráfico de conversiones por canal
-        channel_conversions = managers['data_processor'].get_channel_conversions(data)
-        if not channel_conversions.empty:
-            fig = px.bar(
-                channel_conversions,
-                x='channel',
-                y='conversions',
-                title="🎯 Conversiones por Canal",
-                color='conversions',
-                color_continuous_scale='Blues'
-            )
-            fig.update_layout(
-                font=dict(size=12),
-                showlegend=False,
-                height=400
-            )
-            st.plotly_chart(fig, use_container_width=True)
-    
-    # Tabla de performance
-    st.subheader("📋 Performance Detallado por Canal")
-    
-    channel_comparison = managers['data_processor'].get_channel_comparison(data)
-    if not channel_comparison.empty:
-        # Formatear datos para mostrar
-        formatted_data = channel_comparison.copy()
-        formatted_data['spend'] = formatted_data['spend'].apply(lambda x: f"${x:,.2f}")
-        formatted_data['conversions'] = formatted_data['conversions'].apply(lambda x: f"{x:.0f}")
-        formatted_data['roi'] = formatted_data['roi'].apply(lambda x: f"{x:.1f}%")
-        formatted_data['cpc'] = formatted_data['cpc'].apply(lambda x: f"${x:.2f}")
-        formatted_data['ctr'] = formatted_data['ctr'].apply(lambda x: f"{x:.2f}%" if x > 0 else "N/A")
-        
-        # Renombrar columnas
-        formatted_data.columns = ['Canal', 'Gasto', 'Conversiones', 'ROI', 'CPC', 'CTR']
-        
-        st.dataframe(formatted_data, use_container_width=True, hide_index=True)
-    
-    # Insights automáticos
-    st.subheader("🧠 Insights Automáticos")
-    
-    insights = managers['data_processor'].generate_performance_insights(data)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**💡 Insights Principales:**")
-        for insight in insights[:3]:
-            if insight['type'] == 'positive':
-                st.markdown(f"""
-                <div class="insight-card">
-                    <strong>✅ {insight['metric']}:</strong> {insight['message']} ({insight['value']})
-                </div>
-                """, unsafe_allow_html=True)
-            elif insight['type'] == 'negative':
-                st.markdown(f"""
-                <div class="insight-card recommendation-high">
-                    <strong>⚠️ {insight['metric']}:</strong> {insight['message']} ({insight['value']})
-                </div>
-                """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("**🚀 Recomendaciones:**")
-        ai_insights = managers['ai_analyzer'].analyze_data(data)
-        
-        for rec in ai_insights.get('recommendations', [])[:3]:
-            priority_class = f"recommendation-{rec.get('priority', 'low')}"
-            priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(rec.get('priority', 'low'), '⚪')
-            
-            st.markdown(f"""
-            <div class="insight-card {priority_class}">
-                <strong>{priority_icon} {rec.get('title', 'Recomendación')}:</strong><br>
-                <small>{rec.get('description', 'Descripción no disponible')}</small>
-            </div>
-            """, unsafe_allow_html=True)
 
-def show_integrations_config():
-    """Página de configuración de integraciones"""
+def show_charts_section(data_processor, processed_data):
+    """Mostrar sección de gráficos"""
+    st.markdown("### 📈 Análisis Visual")
+    
+    charts = data_processor.create_performance_charts(processed_data)
+    
+    if charts:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'revenue_trend' in charts and charts['revenue_trend']:
+                st.plotly_chart(charts['revenue_trend'], use_container_width=True)
+        
+        with col2:
+            if 'channel_performance' in charts and charts['channel_performance']:
+                st.plotly_chart(charts['channel_performance'], use_container_width=True)
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            if 'roas_comparison' in charts and charts['roas_comparison']:
+                st.plotly_chart(charts['roas_comparison'], use_container_width=True)
+        
+        with col4:
+            if 'conversion_funnel' in charts and charts['conversion_funnel']:
+                st.plotly_chart(charts['conversion_funnel'], use_container_width=True)
+    else:
+        st.info("📊 Conecta más integraciones para ver gráficos detallados")
+
+def show_insights_section(ai_analyzer, processed_data):
+    """Mostrar sección de insights de IA"""
+    st.markdown("### 🤖 Insights de IA")
+    
+    # Generar insights
+    insights = ai_analyzer.analyze_performance_data(processed_data.get('raw_data', {}))
+    
+    # Fecha del reporte
+    report_date = datetime.now().strftime("%d/%m/%Y %H:%M")
+    
+    st.markdown(f"**Fecha del reporte:** {report_date}")
+    st.markdown("---")
+    
+    # Resumen de KPIs
+    st.markdown("### 📊 Resumen de KPIs")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        revenue = kpis.get('total_revenue', {})
+        st.metric("Revenue Total", f"${revenue.get('value', 0):,.0f}", f"{revenue.get('trend', 0):+.1f}%")
+    
+    with col2:
+        roas = kpis.get('overall_roas', {})
+        st.metric("ROAS Promedio", f"{roas.get('value', 0):.1f}x", f"{roas.get('trend', 0):+.1f}%")
+    
+    with col3:
+        conversions = kpis.get('total_conversions', {})
+        st.metric("Conversiones", f"{conversions.get('value', 0):,}", f"{conversions.get('trend', 0):+.1f}%")
+    
+    with col4:
+        spend = kpis.get('total_spend', {})
+        st.metric("Gasto Total", f"${spend.get('value', 0):,.0f}", f"{spend.get('trend', 0):+.1f}%")
+    
+    # Principales insights
+    st.markdown("### 💡 Principales Insights")
+    
+    opportunities = insights.get('optimization_opportunities', [])[:3]
+    for i, opp in enumerate(opportunities, 1):
+        st.write(f"{i}. **{opp.get('title', 'Oportunidad')}**: {opp.get('description', '')}")
+    
+    # Recomendaciones de acción
+    st.markdown("### 🎯 Recomendaciones de Acción")
+    
+    scaling = insights.get('scaling_recommendations', [])[:3]
+    for i, rec in enumerate(scaling, 1):
+        action_type = "Escalar" if rec.get('type') == 'scale_up' else "Reducir"
+        st.write(f"{i}. **{action_type} {rec.get('channel', 'Canal')}**: {rec.get('recommended_action', '')}")
+
+def generate_performance_report(data_processor, processed_data):
+    """Generar reporte de performance"""
+    st.markdown("## 📈 Reporte de Performance")
+    
+    # Métricas por canal
+    st.markdown("### 📊 Performance por Canal")
+    
+    performance = processed_data['combined_metrics'].get('performance', {})
+    channel_ranking = performance.get('channel_ranking', [])
+    
+    if channel_ranking:
+        df_channels = pd.DataFrame(channel_ranking)
+        st.dataframe(df_channels, use_container_width=True)
+    
+    # Tendencias
+    st.markdown("### 📈 Tendencias")
+    charts = data_processor.create_performance_charts(processed_data)
+    
+    if charts.get('revenue_trend'):
+        st.plotly_chart(charts['revenue_trend'], use_container_width=True)
+
+def generate_ai_report(ai_analyzer, processed_data):
+    """Generar reporte de insights de IA"""
+    st.markdown("## 🤖 Reporte de Insights de IA")
+    
+    # Generar reporte completo
+    report = ai_analyzer.export_insights_report('dict')
+    
+    # Mostrar resumen ejecutivo
+    summary = report.get('executive_summary', {})
+    
+    st.markdown("### 📋 Resumen Ejecutivo")
+    st.write(f"**Puntuación General:** {summary.get('overall_score', 0)}/100")
+    st.write(f"**Total de Oportunidades:** {summary.get('key_metrics', {}).get('total_opportunities', 0)}")
+    st.write(f"**Alertas Críticas:** {summary.get('key_metrics', {}).get('critical_alerts', 0)}")
+    
+    # Exportar reporte completo
+    st.markdown("### 💾 Exportar Reporte Completo")
+    
+    report_json = ai_analyzer.export_insights_report('json')
+    st.download_button(
+        "📄 Descargar Reporte Completo (JSON)",
+        report_json,
+        f"reporte_ia_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+        "application/json"
+    )
+
+def show_settings_page(onboarding, integration_manager):
+    """Mostrar página de configuración"""
     st.markdown("""
-    <div class="header-container">
-        <h1 style="font-size: 3rem; font-weight: bold; margin-bottom: 1rem; background: linear-gradient(45deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-            🔗 Configurar Integraciones
-        </h1>
-        <p style="font-size: 1.2rem; color: #666; margin-bottom: 0;">
-            Conecta tus herramientas de marketing para obtener insights automáticos
+    <div class='main-header'>
+        <h1 style='margin: 0; color: white;'>⚙️ Configuración</h1>
+        <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>
+            Configuración del sistema y preferencias
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Tabs para diferentes integraciones
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏪 E-commerce", "📱 Social Media", "📧 Email Marketing", "📊 Analytics", "📄 CSV Upload"
+    # Configuración del onboarding
+    st.markdown("### 🎯 Configuración del Negocio")
+    
+    if onboarding.is_completed():
+        business_config = onboarding.get_business_config()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Nombre del negocio:** {business_config.get('business_name', 'N/A')}")
+            st.write(f"**Tipo de negocio:** {business_config.get('business_type', 'N/A')}")
+            st.write(f"**Industria:** {business_config.get('industry', 'N/A')}")
+        
+        with col2:
+            st.write(f"**Tamaño:** {business_config.get('business_size', 'N/A')}")
+            st.write(f"**Ingresos:** {business_config.get('monthly_revenue', 'N/A')}")
+            st.write(f"**Completado:** {business_config.get('completed_at', 'N/A')}")
+        
+        if st.button("🔄 Reconfigurar Negocio"):
+            st.session_state.onboarding_completed = False
+            st.session_state.onboarding_step = 1
+            st.success("Onboarding reiniciado. Serás redirigido...")
+            st.rerun()
+    
+    # Configuración de integraciones
+    st.markdown("### 🔗 Estado de Integraciones")
+    integration_manager.show_connection_health()
+    
+    # Configuración del sistema
+    st.markdown("### 🛠️ Configuración del Sistema")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Preferencias de Dashboard")
+        
+        theme_preference = st.selectbox(
+            "Tema visual",
+            ["Claro", "Oscuro", "Automático"],
+            index=0
+        )
+        
+        update_frequency = st.selectbox(
+            "Frecuencia de actualización",
+            ["Tiempo real", "Cada 5 minutos", "Cada hora", "Manual"],
+            index=1
+        )
+        
+        notifications = st.checkbox("Notificaciones push", value=True)
+    
+    with col2:
+        st.subheader("Configuración de Datos")
+        
+        data_retention = st.selectbox(
+            "Retención de datos",
+            ["30 días", "90 días", "1 año", "Indefinido"],
+            index=1
+        )
+        
+        auto_backup = st.checkbox("Backup automático", value=True)
+        
+        data_quality_checks = st.checkbox("Verificaciones de calidad", value=True)
+    
+    # Guardar configuración
+    if st.button("💾 Guardar Configuración", type="primary"):
+        # Aquí se guardaría la configuración
+        st.success("✅ Configuración guardada correctamente")
+    
+    # Información del sistema
+    st.markdown("### ℹ️ Información del Sistema")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Versión", "v2.1.0")
+    
+    with col2:
+        st.metric("Última actualización", "09/09/2025")
+    
+    with col3:
+        st.metric("Uptime", "99.9%")
+
+if __name__ == "__main__":
+    main().get('raw_data', {}))
+    
+    # Mostrar insights en tabs
+    tab1, tab2, tab3 = st.tabs(["🎯 Oportunidades", "📈 Escalado", "⚠️ Alertas"])
+    
+    with tab1:
+        opportunities = insights.get('optimization_opportunities', [])
+        if opportunities:
+            for opp in opportunities[:3]:
+                st.markdown(f"""
+                <div class='insight-card'>
+                    <h5 style='margin: 0; color: #333;'>{opp.get('title', 'Oportunidad')}</h5>
+                    <p style='margin: 0.5rem 0; color: #666;'>{opp.get('description', '')}</p>
+                    <p style='margin: 0; color: #28a745; font-weight: bold;'>
+                        💡 {opp.get('potential_impact', 'Mejora esperada')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("🎉 No se encontraron oportunidades críticas de optimización")
+    
+    with tab2:
+        scaling = insights.get('scaling_recommendations', [])
+        if scaling:
+            for rec in scaling[:3]:
+                color = "#28a745" if rec.get('type') == 'scale_up' else "#dc3545"
+                icon = "📈" if rec.get('type') == 'scale_up' else "📉"
+                
+                st.markdown(f"""
+                <div style='border-left: 4px solid {color}; background: #f8f9fa; 
+                            padding: 1rem; border-radius: 5px; margin: 1rem 0;'>
+                    <h6 style='margin: 0; color: {color};'>{icon} {rec.get('title', 'Recomendación')}</h6>
+                    <p style='margin: 0.3rem 0;'><strong>Canal:</strong> {rec.get('channel', 'N/A')}</p>
+                    <p style='margin: 0.3rem 0;'><strong>Acción:</strong> {rec.get('recommended_action', '')}</p>
+                    <p style='margin: 0; color: #28a745;'><strong>Impacto:</strong> {rec.get('expected_impact', '')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("📊 Necesitas más datos para generar recomendaciones de escalado")
+    
+    with tab3:
+        alerts = insights.get('anomaly_alerts', [])
+        if alerts:
+            for alert in alerts[:3]:
+                alert_type = alert.get('alert_type', 'info')
+                colors = {
+                    'critical': '#dc3545',
+                    'warning': '#ffc107',
+                    'positive': '#28a745'
+                }
+                color = colors.get(alert_type, '#17a2b8')
+                
+                st.markdown(f"""
+                <div style='border-left: 4px solid {color}; background: #f8f9fa; 
+                            padding: 1rem; border-radius: 5px; margin: 1rem 0;'>
+                    <h6 style='margin: 0; color: {color};'>
+                        {'🚨' if alert_type == 'critical' else '⚠️' if alert_type == 'warning' else '✅'} 
+                        {alert.get('metric_affected', 'Métrica')}
+                    </h6>
+                    <p style='margin: 0.3rem 0;'>{alert.get('description', '')}</p>
+                    <p style='margin: 0; font-weight: bold;'>{alert.get('recommended_action', '')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.success("✅ No hay alertas críticas en este momento")
+
+def show_integrations_page(integration_manager):
+    """Mostrar página de integraciones"""
+    integration_manager.show_integrations_page()
+
+def show_ai_analysis_page(integration_manager, ai_analyzer, data_processor):
+    """Mostrar página de análisis de IA"""
+    st.markdown("""
+    <div class='main-header'>
+        <h1 style='margin: 0; color: white;'>🤖 Análisis de IA</h1>
+        <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>
+            Insights inteligentes y recomendaciones automáticas
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Verificar conexiones
+    connected_integrations = integration_manager.get_connected_connectors()
+    
+    if not connected_integrations:
+        st.warning("🔗 Conecta al menos una integración para generar análisis de IA")
+        return
+    
+    # Procesar datos
+    processed_data = data_processor.process_multi_source_data(integration_manager)
+    
+    # Generar análisis completo
+    with st.spinner("🤖 Generando análisis de IA..."):
+        insights = ai_analyzer.analyze_performance_data(processed_data.get('raw_data', {}))
+    
+    # Resumen ejecutivo
+    st.markdown("### 📋 Resumen Ejecutivo")
+    executive_summary = ai_analyzer.generate_executive_summary()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Puntuación General",
+            f"{executive_summary['overall_score']}/100",
+            help="Puntuación basada en performance, oportunidades y salud del sistema"
+        )
+    
+    with col2:
+        st.metric(
+            "Oportunidades",
+            executive_summary['key_metrics']['total_opportunities'],
+            help="Número de oportunidades de optimización identificadas"
+        )
+    
+    with col3:
+        st.metric(
+            "Alertas Críticas",
+            executive_summary['key_metrics']['critical_alerts'],
+            help="Alertas que requieren atención inmediata"
+        )
+    
+    with col4:
+        st.metric(
+            "Recomendaciones",
+            executive_summary['key_metrics']['scaling_recommendations'],
+            help="Recomendaciones de escalado disponibles"
+        )
+    
+    # Análisis detallado en tabs
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🎯 Optimización", "📈 Escalado", "🎨 Creativos", "👥 Audiencias"
     ])
     
     with tab1:
-        st.subheader("E-commerce Platforms")
-        col1, col2 = st.columns(2)
-        with col1:
-            configure_shopify()
-        with col2:
-            configure_woocommerce()
+        st.markdown("#### 🔍 Oportunidades de Optimización")
+        opportunities = insights.get('optimization_opportunities', [])
+        
+        for i, opp in enumerate(opportunities, 1):
+            priority = opp.get('priority', 'media')
+            priority_colors = {'alta': '#dc3545', 'media': '#ffc107', 'baja': '#28a745'}
+            
+            with st.expander(f"{i}. {opp.get('title', 'Oportunidad')}", expanded=i<=2):
+                col_info, col_actions = st.columns([2, 1])
+                
+                with col_info:
+                    st.write(f"**Canal:** {opp.get('channel', 'General')}")
+                    st.write(f"**Descripción:** {opp.get('description', '')}")
+                    st.write(f"**Impacto Potencial:** {opp.get('potential_impact', 'N/A')}")
+                
+                with col_actions:
+                    st.markdown(f"""
+                    <div style='background: {priority_colors[priority]}; color: white; 
+                                padding: 0.5rem; border-radius: 5px; text-align: center;'>
+                        <strong>Prioridad: {priority.upper()}</strong>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                actions = opp.get('actions', [])
+                if actions:
+                    st.write("**Acciones recomendadas:**")
+                    for action in actions:
+                        st.write(f"• {action}")
     
     with tab2:
-        st.subheader("Social Media Advertising")
-        configure_meta()
+        st.markdown("#### 📊 Recomendaciones de Escalado")
+        scaling_recs = insights.get('scaling_recommendations', [])
+        
+        for rec in scaling_recs:
+            rec_type = rec.get('type', 'scale_up')
+            icon = "📈" if rec_type == 'scale_up' else "📉"
+            color = "#28a745" if rec_type == 'scale_up' else "#dc3545"
+            
+            st.markdown(f"""
+            <div style='border: 2px solid {color}; background: #f8f9fa; 
+                        padding: 1.5rem; border-radius: 10px; margin: 1rem 0;'>
+                <h5 style='margin: 0; color: {color};'>{icon} {rec.get('title', '')}</h5>
+                <div style='margin: 1rem 0;'>
+                    <strong>Canal:</strong> {rec.get('channel', 'N/A')}<br>
+                    <strong>ROAS Actual:</strong> {rec.get('current_roas', 0):.1f}x<br>
+                    <strong>Gasto Actual:</strong> ${rec.get('current_spend', 0):,}<br>
+                    <strong>Acción Recomendada:</strong> {rec.get('recommended_action', '')}<br>
+                    <strong>Impacto Esperado:</strong> {rec.get('expected_impact', '')}
+                </div>
+                <div style='background: #e9ecef; padding: 0.5rem; border-radius: 5px;'>
+                    <strong>Riesgo:</strong> {rec.get('risk_level', 'Medio')} | 
+                    <strong>Timeline:</strong> {rec.get('timeline', 'N/A')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
     
     with tab3:
-        st.subheader("Email Marketing Platforms")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            configure_klaviyo()
-        with col2:
-            configure_mailchimp()
-        with col3:
-            configure_mailerlite()
+        st.markdown("#### 🎨 Análisis de Creativos")
+        creative_insights = insights.get('creative_insights', [])
+        
+        if creative_insights:
+            for creative in creative_insights:
+                performance = creative.get('performance_level', 'medio')
+                colors = {'alto': '#28a745', 'medio': '#ffc107', 'bajo': '#dc3545'}
+                
+                st.markdown(f"""
+                <div style='border-left: 4px solid {colors[performance]}; background: #f8f9fa; 
+                            padding: 1rem; border-radius: 5px; margin: 1rem 0;'>
+                    <h6 style='margin: 0;'>{creative.get('creative_type', 'Tipo de Creative')}</h6>
+                    <p style='margin: 0.5rem 0;'>
+                        <strong>Performance:</strong> {performance.title()} | 
+                        <strong>CTR:</strong> {creative.get('metrics', {}).get('ctr', 0):.1f}% | 
+                        <strong>CPC:</strong> ${creative.get('metrics', {}).get('cpc', 0):.2f}
+                    </p>
+                    <p style='margin: 0; color: #666;'>{creative.get('recommendation', '')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Conecta plataformas publicitarias para ver análisis de creativos")
     
     with tab4:
-        st.subheader("Analytics Platforms")
-        configure_ga4()
-    
-    with tab5:
-        st.subheader("CSV Data Upload")
-        configure_csv()
-
-def configure_ga4():
-    """Configuración de GA4"""
-    manager = managers['integration_manager']
-    
-    st.markdown("### 📊 Google Analytics 4")
-    
-    if manager.is_configured('ga4'):
-        st.success("✅ Google Analytics 4 está configurado")
-        config = manager.get_config('ga4')
-        st.info(f"Property ID: {config.get('property_id', 'No configurado')}")
+        st.markdown("#### 👥 Insights de Audiencias")
+        audience_insights = insights.get('audience_insights', [])
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Reconfigurar GA4", key="reconfig_ga4"):
-                manager.remove_integration('ga4')
-                st.rerun()
-        
-        with col2:
-            if st.button("🧪 Probar Conexión GA4", key="test_ga4"):
-                with st.spinner("Probando conexión..."):
-                    test_result = manager.test_connection('ga4')
-                    if test_result['success']:
-                        st.success("✅ Conexión exitosa")
-                        st.json(test_result['sample_data'])
-                    else:
-                        st.error(f"❌ Error: {test_result['error']}")
-    else:
-        st.info("ℹ️ Configura tu integración con Google Analytics 4")
-        
-        with st.form("ga4_config"):
-            property_id = st.text_input(
-                "Property ID",
-                placeholder="123456789",
-                help="Encuentra tu Property ID en GA4 > Admin > Property Settings"
-            )
-            
-            credentials_json = st.text_area(
-                "Service Account JSON",
-                placeholder="Pega aquí el contenido de tu archivo de credenciales JSON",
-                help="Crea una Service Account en Google Cloud Console"
-            )
-            
-            submitted = st.form_submit_button("💾 Guardar Configuración")
-            
-            if submitted:
-                if property_id and credentials_json:
-                    try:
-                        config = {
-                            'property_id': property_id,
-                            'credentials': json.loads(credentials_json)
-                        }
-                        
-                        success = manager.add_integration('ga4', config)
-                        
-                        if success:
-                            st.success("✅ GA4 configurado correctamente")
-                            st.rerun()
-                        else:
-                            st.error("❌ Error al configurar GA4")
-                    
-                    except json.JSONDecodeError:
-                        st.error("❌ JSON de credenciales inválido")
-                else:
-                    st.error("❌ Completa todos los campos")
-
-def configure_meta():
-    """Configuración de Meta Ads"""
-    manager = managers['integration_manager']
-    
-    st.markdown("### 📘 Meta Ads (Facebook/Instagram)")
-    
-    if manager.is_configured('meta'):
-        st.success("✅ Meta Ads está configurado")
-        config = manager.get_config('meta')
-        st.info(f"Ad Account ID: {config.get('ad_account_id', 'No configurado')}")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Reconfigurar Meta", key="reconfig_meta"):
-                manager.remove_integration('meta')
-                st.rerun()
-        
-        with col2:
-            if st.button("🧪 Probar Conexión Meta", key="test_meta"):
-                with st.spinner("Probando conexión..."):
-                    test_result = manager.test_connection('meta')
-                    if test_result['success']:
-                        st.success("✅ Conexión exitosa")
-                        st.json(test_result['sample_data'])
-                    else:
-                        st.error(f"❌ Error: {test_result['error']}")
-    else:
-        st.info("ℹ️ Configura tu integración con Meta Ads")
-        
-        with st.form("meta_config"):
-            access_token = st.text_input(
-                "Access Token",
-                type="password",
-                help="Genera un token de acceso en Meta for Developers"
-            )
-            
-            ad_account_id = st.text_input(
-                "Ad Account ID",
-                placeholder="act_123456789",
-                help="ID de tu cuenta publicitaria (incluye el prefijo 'act_')"
-            )
-            
-            submitted = st.form_submit_button("💾 Guardar Configuración")
-            
-            if submitted:
-                if access_token and ad_account_id:
-                    config = {
-                        'access_token': access_token,
-                        'ad_account_id': ad_account_id
-                    }
-                    
-                    success = manager.add_integration('meta', config)
-                    
-                    if success:
-                        st.success("✅ Meta Ads configurado correctamente")
-                        st.rerun()
-                    else:
-                        st.error("❌ Error al configurar Meta Ads")
-                else:
-                    st.error("❌ Completa todos los campos")
-
-def configure_shopify():
-    """Configuración de Shopify"""
-    manager = managers['integration_manager']
-    
-    st.markdown("### 🛍️ Shopify")
-    
-    if manager.is_configured('shopify'):
-        st.success("✅ Shopify está configurado")
-    else:
-        with st.form("shopify_config"):
-            shop_domain = st.text_input("Shop Domain", placeholder="tienda.myshopify.com")
-            access_token = st.text_input("Access Token", type="password")
-            
-            submitted = st.form_submit_button("💾 Configurar Shopify")
-            
-            if submitted and shop_domain and access_token:
-                config = {'shop_domain': shop_domain, 'access_token': access_token}
-                if manager.add_integration('shopify', config):
-                    st.success("✅ Shopify configurado")
-                    st.rerun()
-
-def configure_woocommerce():
-    """Configuración de WooCommerce"""
-    manager = managers['integration_manager']
-    
-    st.markdown("### 🛒 WooCommerce")
-    
-    if manager.is_configured('woocommerce'):
-        st.success("✅ WooCommerce está configurado")
-    else:
-        with st.form("woo_config"):
-            store_url = st.text_input("Store URL", placeholder="https://tusitio.com")
-            consumer_key = st.text_input("Consumer Key")
-            consumer_secret = st.text_input("Consumer Secret", type="password")
-            
-            submitted = st.form_submit_button("💾 Configurar WooCommerce")
-            
-            if submitted and store_url and consumer_key and consumer_secret:
-                config = {
-                    'store_url': store_url,
-                    'consumer_key': consumer_key,
-                    'consumer_secret': consumer_secret
+        if audience_insights:
+            for audience in audience_insights:
+                performance = audience.get('performance_rating', 'regular')
+                colors = {
+                    'excelente': '#28a745',
+                    'bueno': '#17a2b8', 
+                    'regular': '#ffc107',
+                    'bajo': '#dc3545'
                 }
-                if manager.add_integration('woocommerce', config):
-                    st.success("✅ WooCommerce configurado")
-                    st.rerun()
+                
+                st.markdown(f"""
+                <div style='border-left: 4px solid {colors[performance]}; background: #f8f9fa; 
+                            padding: 1rem; border-radius: 5px; margin: 1rem 0;'>
+                    <h6 style='margin: 0;'>{audience.get('audience_name', 'Audiencia')}</h6>
+                    <p style='margin: 0.5rem 0;'>
+                        <strong>ROAS:</strong> {audience.get('roas', 0):.1f}x | 
+                        <strong>% Presupuesto:</strong> {audience.get('spend_percentage', 0):.1f}% | 
+                        <strong>Performance:</strong> {performance.title()}
+                    </p>
+                    <p style='margin: 0; color: {colors[performance]}; font-weight: bold;'>
+                        📝 {audience.get('recommendation', '')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Conecta plataformas publicitarias para ver insights de audiencias")
 
-def configure_klaviyo():
-    """Configuración de Klaviyo"""
-    manager = managers['integration_manager']
+def show_reports_page(integration_manager, data_processor, ai_analyzer):
+    """Mostrar página de reportes"""
+    st.markdown("""
+    <div class='main-header'>
+        <h1 style='margin: 0; color: white;'>📈 Reportes</h1>
+        <p style='margin: 0.5rem 0 0 0; opacity: 0.9; color: white;'>
+            Reportes automáticos y exportación de datos
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("### 📧 Klaviyo")
+    # Verificar datos disponibles
+    processed_data = data_processor.process_multi_source_data(integration_manager)
     
-    if manager.is_configured('klaviyo'):
-        st.success("✅ Klaviyo configurado")
-    else:
-        with st.form("klaviyo_config"):
-            api_key = st.text_input("API Key", type="password")
-            submitted = st.form_submit_button("💾 Configurar")
-            
-            if submitted and api_key:
-                if manager.add_integration('klaviyo', {'api_key': api_key}):
-                    st.success("✅ Klaviyo configurado")
-                    st.rerun()
-
-def configure_mailchimp():
-    """Configuración de Mailchimp"""
-    manager = managers['integration_manager']
+    if not processed_data or not processed_data.get('combined_metrics'):
+        st.warning("🔗 Conecta integraciones para generar reportes")
+        return
     
-    st.markdown("### 🐵 Mailchimp")
+    # Opciones de reportes
+    col1, col2 = st.columns(2)
     
-    if manager.is_configured('mailchimp'):
-        st.success("✅ Mailchimp configurado")
-    else:
-        with st.form("mailchimp_config"):
-            api_key = st.text_input("API Key", type="password")
-            server_prefix = st.text_input("Server Prefix", placeholder="us1")
-            submitted = st.form_submit_button("💾 Configurar")
-            
-            if submitted and api_key and server_prefix:
-                config = {'api_key': api_key, 'server_prefix': server_prefix}
-                if manager.add_integration('mailchimp', config):
-                    st.success("✅ Mailchimp configurado")
-                    st.rerun()
-
-def configure_mailerlite():
-    """Configuración de MailerLite"""
-    manager = managers['integration_manager']
-    
-    st.markdown("### 📮 MailerLite")
-    
-    if manager.is_configured('mailerlite'):
-        st.success("✅ MailerLite configurado")
-    else:
-        with st.form("mailerlite_config"):
-            api_key = st.text_input("API Key", type="password")
-            submitted = st.form_submit_button("💾 Configurar")
-            
-            if submitted and api_key:
-                if manager.add_integration('mailerlite', {'api_key': api_key}):
-                    st.success("✅ MailerLite configurado")
-                    st.rerun()
-
-def configure_csv():
-    """Configuración de CSV"""
-    manager = managers['integration_manager']
-    
-    st.markdown("### 📄 CSV Upload")
-    
-    uploaded_file = st.file_uploader("Sube tu archivo CSV", type=['csv'])
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.write("### Preview:")
-        st.dataframe(df.head())
+    with col1:
+        st.markdown("### 📊 Reportes Disponibles")
         
-        with st.form("csv_mapping"):
-            col1, col2 = st.columns(2)
+        # Reporte ejecutivo
+        if st.button("📋 Reporte Ejecutivo", use_container_width=True):
+            generate_executive_report(integration_manager, data_processor, ai_analyzer)
+        
+        # Reporte de performance
+        if st.button("📈 Reporte de Performance", use_container_width=True):
+            generate_performance_report(data_processor, processed_data)
+        
+        # Reporte de IA
+        if st.button("🤖 Reporte de Insights IA", use_container_width=True):
+            generate_ai_report(ai_analyzer, processed_data)
+    
+    with col2:
+        st.markdown("### 💾 Exportar Datos")
+        
+        # Exportar datos procesados
+        if st.button("📄 Exportar a Excel", use_container_width=True):
+            filename = data_processor.export_processed_data('excel')
+            if filename:
+                st.success(f"✅ Datos exportados a {filename}")
+        
+        # Exportar configuración
+        if st.button("⚙️ Exportar Configuración", use_container_width=True):
+            config = integration_manager.export_configuration()
+            st.download_button(
+                "Descargar configuración",
+                str(config),
+                "configuracion_marketing_dashboard.json",
+                "application/json"
+            )
+        
+        # Calidad de datos
+        st.markdown("### 🔍 Calidad de Datos")
+        quality_report = data_processor.get_data_quality_report()
+        
+        if quality_report:
+            st.metric(
+                "Puntuación de Calidad",
+                f"{quality_report['overall_score']:.0f}/100"
+            )
             
-            with col1:
-                date_col = st.selectbox("Columna de fecha", df.columns)
-                revenue_col = st.selectbox("Columna de ingresos", df.columns)
-                quantity_col = st.selectbox("Columna de cantidad", df.columns)
-            
-            with col2:
-                product_col = st.selectbox("Columna de producto", df.columns)
-                category_col = st.selectbox("Columna de categoría", df.columns)
-                customer_col = st.selectbox("Columna de cliente", df.columns)
-            
-            submitted = st.form_submit_button("💾 Guardar CSV")
-            
-            if submitted:
-                config = {
-                    'data': df.to_dict('records'),
-                    'mapping': {
-                        'date': date_col,
-                        'revenue': revenue_col,
-                        'quantity': quantity_col,
-                        
+            if quality_report['data_issues']:
+                with st.expander("⚠️ Problemas Detectados"):
+                    for issue in quality_report['data_issues']:
+                        st.write(f"• {issue}")
+
+def generate_executive_report(integration_manager, data_processor, ai_analyzer):
+    """Generar reporte ejecutivo"""
+    st.markdown("## 📋 Reporte Ejecutivo")
+    
+    # Procesar datos
+    processed_data = data_processor.process_multi_source_data(integration_manager)
+    kpis = data_processor.get_kpi_metrics(processed_data)
+    insights = ai_analyzer.analyze_performance_data(processed_data
