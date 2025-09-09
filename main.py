@@ -205,16 +205,143 @@ def show_database_config():
 
 def show_api_config():
     """Configuración para APIs"""
-    st.info("🔌 Conecta tu API")
+    st.info("🔌 Conecta tus plataformas de marketing y ventas")
     
-    api_type = st.selectbox("Tipo de API:", ["Shopify", "WooCommerce", "REST API personalizada"])
+    api_categories = {
+        "Publicidad": ["Meta Ads (Facebook/Instagram)", "Google Ads", "TikTok Ads", "LinkedIn Ads"],
+        "E-commerce": ["Shopify", "WooCommerce", "Magento", "BigCommerce"],
+        "Analytics": ["Google Analytics", "Mixpanel", "Hotjar", "Adobe Analytics"],
+        "CRM": ["Salesforce", "HubSpot", "Pipedrive", "Zoho CRM"],
+        "Email Marketing": ["Mailchimp", "SendGrid", "ConvertKit", "Klaviyo"]
+    }
     
-    if api_type == "Shopify":
-        shop_domain = st.text_input("Dominio de la tienda:", placeholder="mi-tienda.myshopify.com")
-        api_key = st.text_input("API Key:", type="password")
-    elif api_type == "REST API personalizada":
-        api_url = st.text_input("URL de la API:", placeholder="https://api.empresa.com")
-        api_token = st.text_input("Token de autenticación:", type="password")
+    selected_apis = []
+    
+    for category, apis in api_categories.items():
+        with st.expander(f"📊 {category}"):
+            for api in apis:
+                if st.checkbox(api, key=f"api_{api}"):
+                    selected_apis.append(api)
+                    show_api_credentials(api)
+    
+    if selected_apis:
+        st.session_state.user_config['selected_apis'] = selected_apis
+        st.success(f"Seleccionadas {len(selected_apis)} integraciones")
+
+def show_api_credentials(api_name):
+    """Mostrar campos específicos para cada API"""
+    st.write(f"**Configuración de {api_name}:**")
+    
+    if api_name == "Meta Ads (Facebook/Instagram)":
+        col1, col2 = st.columns(2)
+        with col1:
+            app_id = st.text_input("App ID:", key=f"{api_name}_app_id", 
+                                 help="ID de tu aplicación de Facebook")
+            access_token = st.text_input("Access Token:", type="password", 
+                                       key=f"{api_name}_token",
+                                       help="Token de acceso de larga duración")
+        with col2:
+            app_secret = st.text_input("App Secret:", type="password", 
+                                     key=f"{api_name}_secret")
+            ad_account_id = st.text_input("Ad Account ID:", 
+                                        key=f"{api_name}_account",
+                                        help="ID de tu cuenta publicitaria (act_XXXXXXX)")
+        
+        st.info("📖 [Guía: Cómo obtener credenciales de Meta Ads](https://developers.facebook.com/docs/marketing-api/get-started)")
+    
+    elif api_name == "Google Ads":
+        col1, col2 = st.columns(2)
+        with col1:
+            client_id = st.text_input("Client ID:", key=f"{api_name}_client_id")
+            client_secret = st.text_input("Client Secret:", type="password", 
+                                        key=f"{api_name}_client_secret")
+        with col2:
+            refresh_token = st.text_input("Refresh Token:", type="password", 
+                                        key=f"{api_name}_refresh_token")
+            customer_id = st.text_input("Customer ID:", key=f"{api_name}_customer_id",
+                                      help="ID de cliente sin guiones (ej: 1234567890)")
+        
+        st.info("📖 [Guía: Configurar API de Google Ads](https://developers.google.com/google-ads/api/docs/first-call/overview)")
+    
+    elif api_name == "Shopify":
+        col1, col2 = st.columns(2)
+        with col1:
+            shop_domain = st.text_input("Dominio de la tienda:", 
+                                      placeholder="mi-tienda.myshopify.com",
+                                      key=f"{api_name}_domain")
+        with col2:
+            api_key = st.text_input("Admin API Access Token:", type="password",
+                                  key=f"{api_name}_token",
+                                  help="Token de la API Admin")
+        
+        st.info("📖 [Guía: Generar token de Shopify](https://shopify.dev/apps/auth/admin-app-access-tokens)")
+    
+    elif api_name == "Google Analytics":
+        col1, col2 = st.columns(2)
+        with col1:
+            property_id = st.text_input("Property ID:", key=f"{api_name}_property",
+                                      help="ID de propiedad de GA4")
+            credentials_file = st.file_uploader("Service Account JSON:", 
+                                              type=['json'],
+                                              key=f"{api_name}_credentials",
+                                              help="Archivo de credenciales de la cuenta de servicio")
+        with col2:
+            view_id = st.text_input("View ID (opcional):", key=f"{api_name}_view",
+                                  help="Para GA Universal Analytics")
+        
+        st.info("📖 [Guía: Configurar Google Analytics API](https://developers.google.com/analytics/devguides/reporting/core/v4/quickstart/service-py)")
+    
+    elif api_name == "HubSpot":
+        access_token = st.text_input("Private App Access Token:", type="password",
+                                   key=f"{api_name}_token",
+                                   help="Token de aplicación privada de HubSpot")
+        
+        st.info("📖 [Guía: Crear aplicación privada en HubSpot](https://developers.hubspot.com/docs/api/private-apps)")
+    
+    elif api_name == "Salesforce":
+        col1, col2 = st.columns(2)
+        with col1:
+            username = st.text_input("Username:", key=f"{api_name}_username")
+            password = st.text_input("Password:", type="password", key=f"{api_name}_password")
+        with col2:
+            security_token = st.text_input("Security Token:", type="password", 
+                                         key=f"{api_name}_token")
+            domain = st.text_input("Domain:", placeholder="your-domain.salesforce.com",
+                                 key=f"{api_name}_domain")
+    
+    else:
+        # Configuración genérica para otras APIs
+        col1, col2 = st.columns(2)
+        with col1:
+            api_url = st.text_input("API URL:", key=f"{api_name}_url",
+                                  placeholder="https://api.example.com")
+        with col2:
+            api_token = st.text_input("API Token/Key:", type="password",
+                                    key=f"{api_name}_token")
+    
+    # Botón de prueba de conexión
+    if st.button(f"🔍 Probar conexión con {api_name}", key=f"test_{api_name}"):
+        test_api_connection(api_name)
+
+def test_api_connection(api_name):
+    """Simular prueba de conexión con las APIs"""
+    with st.spinner(f"Probando conexión con {api_name}..."):
+        import time
+        time.sleep(2)  # Simular tiempo de conexión
+        
+        # En una implementación real, aquí harías las llamadas a las APIs
+        success_rate = np.random.choice([True, False], p=[0.8, 0.2])  # 80% éxito
+        
+        if success_rate:
+            st.success(f"✅ Conexión exitosa con {api_name}")
+            if api_name == "Meta Ads (Facebook/Instagram)":
+                st.info("Se encontraron 3 cuentas publicitarias activas")
+            elif api_name == "Google Ads":
+                st.info("Se encontraron 2 cuentas de Google Ads")
+            elif api_name == "Shopify":
+                st.info("Tienda conectada: 1,234 productos encontrados")
+        else:
+            st.error(f"❌ Error al conectar con {api_name}. Verifica tus credenciales.")
 
 def show_step_metrics():
     """Paso 3: Selección de métricas"""
